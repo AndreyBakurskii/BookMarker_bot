@@ -79,6 +79,17 @@ class API:
         users.order_by(tables.User.id)
         return users.first() if first else users.all()
 
+    @try_except
+    @logger
+    def delete_users(self, id=None, name=None, all=False):
+        users = self.session.query(tables.User)
+        if (all):
+            return users.delete()
+        if (id != None):
+            return users.filter(tables.User.id == id).delete()
+        if (name != None):
+            return users.filter(tables.User.name == name).delete()
+
     ######################################################################################
     # BOOKS
 
@@ -110,6 +121,20 @@ class API:
         books = books.order_by(tables.Book.id)
         return books.first() if first else books.all()
 
+
+    @try_except
+    @logger
+    def delete_books(self, id=None, title=None, author=None, all=False):
+        books = self.session.query(tables.Book)
+        if (id != None):
+            return books.filter(tables.Book.id == id).delete()
+        if (title != None and author != None):
+            books = books.filter(tables.Book.title == title)
+            books = books.filter(tables.Book.author == author)
+            return books.delete()
+        if (all):
+            return books.delete()
+
     ######################################################################################
     # RECORDS
 
@@ -136,6 +161,20 @@ class API:
 
     @try_except
     @logger
+    def delete_record(self, id=None, user=None, book=None, all=False):
+        records = self.session.query(tables.Record)
+        if (id != None):
+            return records.filter(tables.Record.id == id).delete()
+        if (user != None):
+            records = records.filter(tables.Record.name == user)
+            if (all):
+                return records.delete()
+            return records.filter(tables.Record.book_id == book.id).delete()
+        if (all):
+            return records.delete()
+
+    @try_except
+    @logger
     def update_record(self, record, page):
         record.page = page
         record.progress = int((record.page / record.book.pages) * 100)
@@ -150,5 +189,8 @@ class API:
 # api.save_changes()
 
 # api.update_record(record, 23)
+# api.save_changes()
+
+# api.delete_users(name='egor')
 # api.save_changes()
 
