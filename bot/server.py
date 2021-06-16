@@ -20,6 +20,8 @@ from statutes import *
 from const_messages import *
 from utils import book_to_string, create_inline_buttons
 
+from db.api import api
+
 
 def start(update: Update, _: CallbackContext):
     answer = "Привет, друг! Вот тебе нерабочие команды:\n" \
@@ -31,7 +33,9 @@ def start(update: Update, _: CallbackContext):
              "/books" \
 
     # запрос в бд, регистрируем поль-ля
-    print(update.effective_user.username)
+    user = api.add_user(update.effective_user.username)
+    api.save_changes()
+
     update.message.reply_text(answer)
 
 
@@ -74,25 +78,26 @@ def get_search_query(update: Update, context: CallbackContext):
     username = update.effective_user.username
     search_query = update.message.text
 
-    if context.chat_data['choice_search_value'] == CHOICE_VALUE_NAME:
-        # запрос в БД по названию
-        pass
-    else:
-        # запрос в БД по автору
-        pass
+    user = api.get_users(name=username, first=True)
 
     books = []  # книги из запроса
+    if context.chat_data['choice_search_value'] == CHOICE_VALUE_NAME:
+        books = api.get_books(title=search_query)
+    else:
+        books = api.get_books(author=search_query)
 
     if books:
         # если есть хотя бы одна книга:
         for book in books:
             book_id = book.id
 
-            # если книга есть в моей библиотеке
-            reply_markup = create_inline_buttons(username, book_id, delete=True, set_bookmark=True)
-
+            if api.get_records(book=book, user=user, first=True) is not None:
+                # если книга есть в моей библиотеке
+                reply_markup = create_inline_buttons(username, book_id, delete=True, set_bookmark=True)
             # иначе
-            # reply_markup = create_inline_buttons(username, book_id, add2library=True)
+            else:
+                reply_markup = create_inline_buttons(username, book_id, add2library=True)
+
             update.message.reply_text(book_to_string(book),
                                       reply_markup=reply_markup)
 
@@ -110,7 +115,7 @@ def show_books(update: Update, _: CallbackContext):
     # функция для вывода всех книг, которые есть глобально
 
     # запрос в БД
-    books = []  # книги из запроса
+    books = api.get_books()  # книги из запроса
 
     answer = ""
     for book in books:
@@ -122,15 +127,15 @@ def show_books(update: Update, _: CallbackContext):
 
 # ======== функция для работы /my_library ==========
 def my_library(update: Update, _: CallbackContext):
+    # запрос в бд
+    user = api.get_users(update.effective_user.username)
+    records = api.get_records(user=user)
 
-    # запрос в БД
-    books = []  # книги из запроса
+    if records:
+        for record in records:
+            answer = book_to_string(record.book, bookmark=record.page, progress=record.progress)
 
-    if books:
-        for book in books:
-            answer = book_to_string()
-
-            book_id = book.id
+            book_id = record.book.id
             username = update.effective_user.username
 
             reply_markup = create_inline_buttons(username, book_id, delete=True, set_bookmark=True)
@@ -178,7 +183,9 @@ def get_book_data(update: Update, context: CallbackContext):
                 update.message.reply_text(text="Неверный формат данных об годе выпуска.\n\nВернули вас в главное меню.")
                 return ConversationHandler.END
 
-            # запрос в бд о добавлении книги в глобал
+            api.add_book(title=name, author=author, pages=pages, year=year)
+            api.save_changes()
+
             update.message.reply_text(text="Вы успешно добавили книгу!")
         else:
             update.message.reply_text(text="Неверный формат данных об авторе.\n\nВернули вас в главное меню.")
@@ -214,16 +221,34 @@ def callback_inline_buttons_handler(update: Update, context: CallbackContext):
 
 def delete_book_from_library(query: CallbackQuery, username: str, book_id: int):
     # запрос в БД
+    user = api.get_users(name=username, first=True)
+    book = api.get_books(id=book_id, first=True)
+
+    api.delete_record(user=user, book=book)
+    api.save_changes()
+
     query.edit_message_text(text=f"Книга с ID= {book_id} удалена из вашей библиотеки")
 
 
 def add_book_to_library(query: CallbackQuery, username: str, book_id: int):
     # запрос в БД, добавить книгу в библиотеку
+    user = api.get_users(name=username, first=True)
+    book = api.get_books(id=book_id)
+    print(user, book)
+
+    api.add_record(user=user, book=book)
+    api.save_changes()
+
     query.edit_message_text(text=f"Книга с ID= {book_id} добавлена в вашу библиотеку")
 
 
-def set_bookmark():
-    pass
+def set_bookmark(username, book_id):
+    user = api.get_users(name=username, first=True)
+    book = api.get_books(id=book_id)
+
+    record = api.get_records(user=user, book=book)
+
+    # api.update_record(record=record, int(new_page))
 
 
 def for_test(update: Update, context: CallbackContext):

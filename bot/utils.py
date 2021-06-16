@@ -1,18 +1,19 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-def book_to_string(book=None) -> str:
-    # answer = f'Book name: {}\n' \
-    #          f'Author: {}\n' \
-    #          f'ID: {}\n' \
-    #          f'Bookmark: {}\n' \
-    #          f'--------------\n'
+def book_to_string(book, bookmark=None, progress=None) -> str:
+    answer = f'Book tittle: {book.title}\n' \
+             f'Author: {book.author}\n' \
+             f'ID: {book.id}\n' \
 
-    answer = f'Book name: Война и мир\n' \
-             f'Author: Толстой Л.Н.\n' \
-             f'ID: 1\n' \
-             f'Bookmark: 0\n' \
-             f'--------------\n'
+    if bookmark is not None:
+        answer += f'Bookmark: {bookmark}\n'
+
+    if progress is not None:
+        answer += f'Progress: {progress}\n'
+
+    answer += f'--------------\n'
+
     return answer
 
 

@@ -1,7 +1,8 @@
 import sqlalchemy as sql
 from datetime import datetime
 
-import tables
+import db.tables as tables
+
 
 def logger(action):
     def wrapper(*args, **kwargs):
@@ -112,7 +113,7 @@ class API:
     @logger
     def get_books(self, id=None, title=None, author=None, first=False):
         if (id != None):
-            return self.session.query(tables.Book.id == id).first()
+            return self.session.query(tables.Book).where(tables.Book.id == id).first()
         books = self.session.query(tables.Book)
         if (title != None):
             books = books.where(tables.Book.title == title)
@@ -166,7 +167,7 @@ class API:
         if (id != None):
             return records.filter(tables.Record.id == id).delete()
         if (user != None):
-            records = records.filter(tables.Record.name == user)
+            records = records.filter(tables.Record.user.id == user.id)
             if (all):
                 return records.delete()
             return records.filter(tables.Record.book_id == book.id).delete()
@@ -180,7 +181,7 @@ class API:
         record.progress = int((record.page / record.book.pages) * 100)
 
 
-# api = API()
+api = API()
 
 # api.add_user('andrey')
 # user = api.add_user('egor')
