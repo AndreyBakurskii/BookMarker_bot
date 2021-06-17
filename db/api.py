@@ -176,9 +176,10 @@ class API:
 
     @try_except
     @logger
-    def update_record(self, record, page):
+    def update_record(self, record, page, comment=None):
         record.page = page
         record.progress = int((record.page / record.book.pages) * 100)
+        record.comment = comment
 
 
 api = API()
