@@ -2,3 +2,4 @@
 .idea
 .vscode
 bot/config.py
+db/config.py

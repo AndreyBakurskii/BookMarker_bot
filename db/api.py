@@ -1,7 +1,10 @@
 import sqlalchemy as sql
+import psycopg2
 from datetime import datetime
 
-import db.tables as tables
+#import db.tables as tables
+import tables
+import config
 
 
 def logger(action):
@@ -19,30 +22,28 @@ def try_except(action):
         try:
             return action(*args, **kwargs)
         except Exception as error:
-            print(f"___ERROR___ > {error} in {action.__name__}")
+            print(f"___ERROR___ > {error} in {action.__name__}".replace('\n', ''))
     return wrapper
 
 
 class API:
 
     def __init__(self, database="main.db"):
-        self.database = database
-        self.create_engine()
-        self.connect()
+        self.database = database 
+        self.create_database(database)
+        self.connect(database)
 
     def __repr__(self):
         return f"__{self.database}__"
 
     @try_except
     @logger
-    def create_engine(self):
-        # self.engine = sql.create_engine(f'postgresql://{username}:{password}@localhost/{self.database}')
-        self.engine = sql.create_engine(f'sqlite:///{self.database}')
+    def connect(self, database=None):
+        if (database != None):
+            self.database = database
+        self.engine = sql.create_engine(f'postgresql+psycopg2://{config.USERNAME}:{config.PASSWORD}@{config.HOST}:{config.PORT}/{self.database}')
+        # self.engine = sql.create_engine(f'sqlite:///{self.database}')
         tables.BASE_TABLE.metadata.create_all(self.engine)
-
-    @try_except
-    @logger
-    def connect(self):
         make_session = sql.orm.sessionmaker()
         make_session.configure(bind=self.engine)
         self.session = make_session()
@@ -51,6 +52,33 @@ class API:
     @logger
     def save_changes(self):
         self.session.commit()
+
+    ######################################################################################
+    # PSYCOPG
+
+    @try_except
+    @logger
+    def create_database(self, database):
+        # Устанавливаем соединение с postgres
+        connection = psycopg2.connect(user=config.USERNAME, password=config.PASSWORD, host=config.HOST, port=config.PORT)
+        connection.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        cursor = connection.cursor()
+        # Создание БД
+        sql_create_database = cursor.execute(f'CREATE DATABASE \"{database}\"')
+        cursor.close()
+        connection.close()
+
+    @try_except
+    @logger
+    def delete_database(self, database):
+        # Устанавливаем соединение с postgres
+        connection = psycopg2.connect(user=config.USERNAME, password=config.PASSWORD, host=config.HOST, port=config.PORT)
+        connection.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        cursor = connection.cursor()
+        # Удаление БД
+        sql_create_database = cursor.execute(f'DROP DATABASE \"{database}\"')
+        cursor.close()
+        connection.close()
 
     ######################################################################################
     # USERS
@@ -184,15 +212,15 @@ class API:
 
 api = API()
 
-# api.add_user('andrey')
-# user = api.add_user('egor')
-# book = api.add_book('test', 'aaa', pages=132)
-# record = api.add_record(user, book)
-# api.save_changes()
+api.add_user('andrey')
+user = api.add_user('egor')
+book = api.add_book('test', 'aaa', pages=132)
+record = api.add_record(user, book)
+api.save_changes()
 
-# api.update_record(record, 23)
-# api.save_changes()
+api.update_record(record, 23)
+api.save_changes()
 
-# api.delete_users(name='egor')
-# api.save_changes()
+api.delete_users(name='egor')
+api.save_changes()
 
