@@ -16,7 +16,7 @@ class Table(BASE_TABLE):
 class Book(Table):
     __tablename__ = 'books'
 
-    title = sql.Column(sql.VARCHAR(255), nullable=False)
+    title = sql.Column(sql.VARCHAR(255), nullable=False, index=True)
     author = sql.Column(sql.VARCHAR(255), nullable=False)
     pages = sql.Column(sql.Integer, nullable=False)
     year = sql.Column(sql.Integer)
@@ -54,6 +54,7 @@ class Record(Table):
     book_id = sql.Column(sql.ForeignKey(Book.id, ondelete='CASCADE'), nullable=False, index=True)
     page = sql.Column(sql.Integer, nullable=False)
     progress = sql.Column(sql.Integer, nullable=False) # == (page / book_id.pages) * 100
+    comment = sql.Column(sql.Text)
 
     # CHECKS
     __table_args__ = (
@@ -69,3 +70,4 @@ class Record(Table):
         self.book_id = book_id
         self.page = 1
         self.progress = 0
+        self.comment = None
