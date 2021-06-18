@@ -2,9 +2,9 @@ import sqlalchemy as sql
 import psycopg2
 from datetime import datetime
 
-#import db.tables as tables
-import tables
-import config
+import db.tables as tables
+# import tables
+import db.config as config
 
 
 def logger(action):
@@ -85,10 +85,10 @@ class API:
 
     @try_except
     @logger
-    def add_user(self, name) -> tables.User:
+    def add_user(self, name, isAdmin=False) -> tables.User:
         user = self.get_users(name=name, first=True)
         if (user == None):
-            user = tables.User(name)
+            user = tables.User(name, isAdmin)
             self.session.add(user)
         return user
 
@@ -210,17 +210,17 @@ class API:
         record.comment = comment
 
 
-api = API()
+api = None
 
-api.add_user('andrey')
-user = api.add_user('egor')
-book = api.add_book('test', 'aaa', pages=132)
-record = api.add_record(user, book)
-api.save_changes()
-
-api.update_record(record, 23)
-api.save_changes()
-
-api.delete_users(name='egor')
-api.save_changes()
+# api.add_user('andrey')
+# user = api.add_user('egor')
+# book = api.add_book('test', 'aaa', pages=132)
+# record = api.add_record(user, book)
+# api.save_changes()
+#
+# api.update_record(record, 23)
+# api.save_changes()
+#
+# api.delete_users(name='egor')
+# api.save_changes()
 

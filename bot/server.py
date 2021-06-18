@@ -15,44 +15,97 @@ from telegram import (Bot, Message, CallbackQuery,
                       Update,
                       )
 
-from config import TOKEN
+from config import TOKEN, USERNAME_ADMIN
 from statutes import *
 from const_messages import *
 from utils import book_to_string, create_inline_buttons
 
-from db.api import api
+import db.api as api
 
 
+# ======== проверка работы БД ===========
+def is_database_created(func):
+    def wrapper(*args, **kwargs):
+        update, context = args
+        username = update.effective_user.username
+        if api.api is None and username == USERNAME_ADMIN:
+            answer = "Здравствуйте, Андрей, вы являетесь администратором этого бота, создайте базу данных для" \
+                     "корректной работы бота.\n\n" \
+                     "/create_database - cоздать базу данных\n" \
+                     "/delete_database - удалить базу данных\n"
+            update.message.reply_text(text=answer)
+        elif api.api is None:
+            answer = "База данных не создана, бот не работает."
+            update.message.reply_text(text=answer)
+
+        elif api.api is not None:
+            func(*args, **kwargs)
+
+    return wrapper
+# ========================================
+
+
+# ===== функция для работы команды /start =====
+@is_database_created
 def start(update: Update, _: CallbackContext):
-    answer = "Привет, друг! Вот тебе нерабочие команды:\n" \
+    answer = "Привет, друг! Мои команды:\n" \
              "/help\n" \
-             "/search_book\n" \
+             "/search\n" \
              "/my_library\n" \
-             "/delete_book\n" \
              "/add_book\n" \
              "/books" \
 
     # запрос в бд, регистрируем поль-ля
-    user = api.add_user(update.effective_user.username)
-    api.save_changes()
+    user = api.api.add_user(update.effective_user.username)
+    api.api.save_changes()
 
     update.message.reply_text(answer)
+# =============================================
 
 
-# команда для отмены любой команды из списка доступных
+# ===== команда для отмены любой команды из списка доступных =====
 def cancel(update: Update, _: CallbackContext):
 
     update.message.reply_text("Команда отменена!")
 
     return ConversationHandler.END
+# ==============================================
+
+
+# ==== функция для работы команды /create_database ====
+def create_database(update: Update, _: CallbackContext):
+    if update.effective_user.username == USERNAME_ADMIN:
+        api.api = api.API()
+        api.api.add_user(name=USERNAME_ADMIN, isAdmin=True)
+        update.message.reply_text(text="База данных создана, бот работает корректно.")
+    else:
+        update.message.reply_text(text="У вас нет прав для этой команды.")
+# =================================================
+
+
+# ==== функция для работы команды /delete_database ====
+def delete_database(update: Update, _: CallbackContext):
+
+    if update.effective_user.username == USERNAME_ADMIN:
+        api.api.delete_database(api.api.database)
+        api.api = None
+
+        update.message.reply_text(text="База данных удалена, бот больше не работает.")
+    else:
+        update.message.reply_text(text="У вас нет прав для этой команды.")
+# =================================================
 
 
 # ======= функции для работы /search_book ========
+@is_database_created
 def search_books(update: Update, _: CallbackContext):
 
     answer = "Вы ввели команду для поиска книги. По какому полю искать книгу?\n\n" + CANCEL_MESSAGE
 
-    keyboard = [[KeyboardButton(text=CHOICE_VALUE_NAME), KeyboardButton(text=CHOICE_VALUE_AUTHOR)]]
+    keyboard = [
+                [KeyboardButton(text=CHOICE_VALUE_NAME), KeyboardButton(text=CHOICE_VALUE_AUTHOR)],
+                [KeyboardButton(text=CHOICE_VALUE_NAME_AND_AUTHOR)]
+               ]
     reply_markup = ReplyKeyboardMarkup(keyboard)
 
     update.message.reply_text(answer, reply_markup=reply_markup)
@@ -68,9 +121,15 @@ def get_choice_search_value(update: Update, context: CallbackContext):
     if choice_search_value == CHOICE_VALUE_NAME or choice_search_value == CHOICE_VALUE_AUTHOR:
         search_value = "название" if choice_search_value == CHOICE_VALUE_NAME else "автора"
 
-        update.message.reply_text(f'Введите {search_value}.\n' + CANCEL_MESSAGE,
+        answer = f'Введите {search_value}.\n'
+        update.message.reply_text(text=answer + CANCEL_MESSAGE,
                                   reply_markup=ReplyKeyboardRemove())
-
+    else:
+        answer = f'Введите название и автора в формате:\n' \
+                 f'Название\n' \
+                 f'Автор\n'
+        update.message.reply_text(text=answer + CANCEL_MESSAGE,
+                                  reply_markup=ReplyKeyboardRemove())
         return GET_SEARCH_QUERY
 
 
@@ -78,20 +137,23 @@ def get_search_query(update: Update, context: CallbackContext):
     username = update.effective_user.username
     search_query = update.message.text
 
-    user = api.get_users(name=username, first=True)
+    user = api.api.get_users(name=username, first=True)
 
     books = []  # книги из запроса
     if context.chat_data['choice_search_value'] == CHOICE_VALUE_NAME:
-        books = api.get_books(title=search_query)
+        books = api.api.get_books(title=search_query)
+    elif context.chat_data['choice_search_value'] == CHOICE_VALUE_AUTHOR:
+        books = api.api.get_books(author=search_query)
     else:
-        books = api.get_books(author=search_query)
+        title, author = search_query.split('\n')
+        books = api.api.get_books(author=author, title=title)
 
     if books:
         # если есть хотя бы одна книга:
         for book in books:
             book_id = book.id
 
-            if api.get_records(book=book, user=user, first=True) is not None:
+            if api.api.get_records(book=book, user=user, first=True) is not None:
                 # если книга есть в моей библиотеке
                 reply_markup = create_inline_buttons(username, book_id, delete=True, set_bookmark=True)
             # иначе
@@ -111,11 +173,12 @@ def get_search_query(update: Update, context: CallbackContext):
 
 
 # ========= функция для работы /books ===========
+@is_database_created
 def show_books(update: Update, _: CallbackContext):
     # функция для вывода всех книг, которые есть глобально
 
     # запрос в БД
-    books = api.get_books()  # книги из запроса
+    books = api.api.get_books()  # книги из запроса
 
     answer = ""
     for book in books:
@@ -126,10 +189,11 @@ def show_books(update: Update, _: CallbackContext):
 
 
 # ======== функция для работы /my_library ==========
+@is_database_created
 def my_library(update: Update, _: CallbackContext):
     # запрос в бд
-    user = api.get_users(update.effective_user.username)
-    records = api.get_records(user=user)
+    user = api.api.get_users(update.effective_user.username)
+    records = api.api.get_records(user=user)
 
     if records:
         for record in records:
@@ -149,10 +213,11 @@ def my_library(update: Update, _: CallbackContext):
 
 
 # ========= функция для работа /add_book ============
+@is_database_created
 def add_book(update: Update, context: CallbackContext):
     answer = "Введите данные для книги в формате, как ниже:\n\n" \
              "Название\n" \
-             "Автор (Фамилия Имя Отчество)\n" \
+             "Автор (информация о нем, Фамилия Имя)\n" \
              "Год написания\n" \
              "Количество страниц\n\n" + CANCEL_MESSAGE
 
@@ -169,7 +234,7 @@ def get_book_data(update: Update, context: CallbackContext):
     if len(parsed_data) == 4:
         name, author, year, pages = parsed_data
 
-        if len(author.split()) == 3:
+        if len(author.split()) >= 2:
 
             try:
                 year = int(year)
@@ -183,8 +248,8 @@ def get_book_data(update: Update, context: CallbackContext):
                 update.message.reply_text(text="Неверный формат данных об годе выпуска.\n\nВернули вас в главное меню.")
                 return ConversationHandler.END
 
-            api.add_book(title=name, author=author, pages=pages, year=year)
-            api.save_changes()
+            api.api.add_book(title=name, author=author, pages=pages, year=year)
+            api.api.save_changes()
 
             update.message.reply_text(text="Вы успешно добавили книгу!")
         else:
@@ -212,7 +277,7 @@ def callback_inline_buttons_handler(update: Update, context: CallbackContext):
         delete_book_from_library(query, username, int(book_id))
 
     if command == COMMAND_SET_BOOKMARK:
-        set_bookmark()
+        set_bookmark(username, book_id)
 
     # update.callback_query.message.reply_text(answer)
     # print(type(update.callback_query.message))
@@ -221,36 +286,37 @@ def callback_inline_buttons_handler(update: Update, context: CallbackContext):
 
 def delete_book_from_library(query: CallbackQuery, username: str, book_id: int):
     # запрос в БД
-    user = api.get_users(name=username, first=True)
-    book = api.get_books(id=book_id, first=True)
+    user = api.api.get_users(name=username, first=True)
+    book = api.api.get_books(id=book_id, first=True)
 
-    api.delete_record(user=user, book=book)
-    api.save_changes()
+    api.api.delete_record(user=user, book=book)
+    api.api.save_changes()
 
     query.edit_message_text(text=f"Книга с ID= {book_id} удалена из вашей библиотеки")
 
 
 def add_book_to_library(query: CallbackQuery, username: str, book_id: int):
     # запрос в БД, добавить книгу в библиотеку
-    user = api.get_users(name=username, first=True)
-    book = api.get_books(id=book_id)
+    user = api.api.get_users(name=username, first=True)
+    book = api.api.get_books(id=book_id)
     print(user, book)
 
-    api.add_record(user=user, book=book)
-    api.save_changes()
+    api.api.add_record(user=user, book=book)
+    api.api.save_changes()
 
     query.edit_message_text(text=f"Книга с ID= {book_id} добавлена в вашу библиотеку")
 
 
 def set_bookmark(username, book_id):
-    user = api.get_users(name=username, first=True)
-    book = api.get_books(id=book_id)
+    user = api.api.get_users(name=username, first=True)
+    book = api.api.get_books(id=book_id)
 
-    record = api.get_records(user=user, book=book)
+    record = api.api.get_records(user=user, book=book)
 
-    # api.update_record(record=record, int(new_page))
+    # api.api.update_record(record=record, int(new_page))
 
 
+@is_database_created
 def for_test(update: Update, context: CallbackContext):
     update.message.reply_text(text="kzkfkzkdsasd", reply_markup=create_inline_buttons("asdad", 12, add2library=True))
 
@@ -263,7 +329,7 @@ if __name__ == '__main__':
     dispatcher.add_handler(start_handler)
 
     search_book_handler = ConversationHandler(
-        entry_points=[CommandHandler('search_book', search_books)],
+        entry_points=[CommandHandler('search', search_books)],
 
         states={
             CHOOSE_SEARCH_VALUE: [MessageHandler(Filters.text & ~Filters.command, get_choice_search_value)],
@@ -291,6 +357,12 @@ if __name__ == '__main__':
 
     my_library_handler = CommandHandler('my_library', my_library)
     dispatcher.add_handler(my_library_handler)
+
+    create_database_handler = CommandHandler('create_database', create_database)
+    dispatcher.add_handler(create_database_handler)
+
+    delete_database_handler = CommandHandler('delete_database', delete_database)
+    dispatcher.add_handler(delete_database_handler)
 
     inline_buttons_handler = CallbackQueryHandler(callback=callback_inline_buttons_handler)
     dispatcher.add_handler(inline_buttons_handler)
