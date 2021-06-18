@@ -277,7 +277,7 @@ def callback_inline_buttons_handler(update: Update, context: CallbackContext):
         delete_book_from_library(query, username, int(book_id))
 
     if command == COMMAND_SET_BOOKMARK:
-        set_bookmark(username, book_id)
+        set_bookmark(query, context, book_id)
 
     # update.callback_query.message.reply_text(answer)
     # print(type(update.callback_query.message))
@@ -307,18 +307,38 @@ def add_book_to_library(query: CallbackQuery, username: str, book_id: int):
     query.edit_message_text(text=f"Книга с ID= {book_id} добавлена в вашу библиотеку")
 
 
-def set_bookmark(username, book_id):
-    user = api.api.get_users(name=username, first=True)
-    book = api.api.get_books(id=book_id)
+def set_bookmark(query: CallbackQuery, context: CallbackContext, book_id):
+    context.chat_data['set_bookmark'] = True
+    context.chat_data['book_id'] = book_id
 
-    record = api.api.get_records(user=user, book=book)
-
-    # api.api.update_record(record=record, int(new_page))
+    query.message.reply_text(text="Введите номер страницы, на который вы остановились.")
 
 
-@is_database_created
+def get_page(update: Update, context: CallbackContext):
+    is_set_bookmark_command = context.chat_data.get('set_bookmark', None)
+    if is_set_bookmark_command:
+        try:
+            new_page = int(update.message.text)
+        except ValueError:
+            update.message.reply_text(text="Вы ввели не число.\n\nВернули вас в главное меню.")
+
+        book_id = context.chat_data['book_id']
+
+        username = update.effective_user.username
+        # user = api.api.get_users(name=username, first=True)
+        # book = api.api.get_books(id=book_id)
+        #
+        # record = api.api.get_records(user=user, book=book, first=True)
+
+        # api.api.update_record(record=record, int(new_page))
+        answer = "Номер страницы, на которой вы остановились, обновлена.\n\n" #+ \
+                 # book_to_string(book, bookmark=record.page, progress=record.progress)
+        update.message.reply_text(text=answer,
+                                  reply_markup=create_inline_buttons(username, book_id, delete=True, set_bookmark=True))
+
+# @is_database_created
 def for_test(update: Update, context: CallbackContext):
-    update.message.reply_text(text="kzkfkzkdsasd", reply_markup=create_inline_buttons("asdad", 12, add2library=True))
+    update.message.reply_text(text="kzkfkzkdsasd", reply_markup=create_inline_buttons("asdad", 12, set_bookmark=True))
 
 
 if __name__ == '__main__':
@@ -366,6 +386,9 @@ if __name__ == '__main__':
 
     inline_buttons_handler = CallbackQueryHandler(callback=callback_inline_buttons_handler)
     dispatcher.add_handler(inline_buttons_handler)
+
+    set_bookmark_handler = MessageHandler(Filters.text & ~Filters.command, get_page)
+    dispatcher.add_handler(set_bookmark_handler)
 
     test_handler = CommandHandler('test', for_test)
     dispatcher.add_handler(test_handler)
