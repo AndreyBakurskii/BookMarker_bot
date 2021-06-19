@@ -10,7 +10,7 @@ def book_to_string(book, bookmark=None, progress=None) -> str:
         answer += f'Bookmark: {bookmark}\n'
 
     if progress is not None:
-        answer += f'Progress: {progress}\n'
+        answer += f'Progress: {progress}/100\n'
 
     answer += f'--------------\n'
 

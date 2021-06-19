@@ -195,7 +195,7 @@ class API:
         if (id != None):
             return records.filter(tables.Record.id == id).delete()
         if (user != None):
-            records = records.filter(tables.Record.user.id == user.id)
+            records = records.filter(tables.Record.user_id == user.id)
             if (all):
                 return records.delete()
             return records.filter(tables.Record.book_id == book.id).delete()

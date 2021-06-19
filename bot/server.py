@@ -1,5 +1,4 @@
 from telegram.ext import (Updater,
-                          Dispatcher,
                           Filters,
                           CommandHandler,
                           CallbackContext,
@@ -8,9 +7,8 @@ from telegram.ext import (Updater,
                           CallbackQueryHandler,
                           )
 
-from telegram import (Bot, Message, CallbackQuery,
+from telegram import (CallbackQuery,
                       ReplyKeyboardRemove, ReplyKeyboardMarkup,
-                      InlineKeyboardButton, InlineKeyboardMarkup,
                       KeyboardButton,
                       Update,
                       )
@@ -39,7 +37,8 @@ def is_database_created(func):
             update.message.reply_text(text=answer)
 
         elif api.api is not None:
-            func(*args, **kwargs)
+            func_out = func(*args, **kwargs)
+            return func_out
 
     return wrapper
 # ========================================
@@ -130,7 +129,7 @@ def get_choice_search_value(update: Update, context: CallbackContext):
                  f'Автор\n'
         update.message.reply_text(text=answer + CANCEL_MESSAGE,
                                   reply_markup=ReplyKeyboardRemove())
-        return GET_SEARCH_QUERY
+    return GET_SEARCH_QUERY
 
 
 def get_search_query(update: Update, context: CallbackContext):
@@ -192,7 +191,7 @@ def show_books(update: Update, _: CallbackContext):
 @is_database_created
 def my_library(update: Update, _: CallbackContext):
     # запрос в бд
-    user = api.api.get_users(name=update.effective_user.username)
+    user = api.api.get_users(name=update.effective_user.username, first=True)
     records = api.api.get_records(user=user)
 
     if records:
@@ -279,8 +278,6 @@ def callback_inline_buttons_handler(update: Update, context: CallbackContext):
     if command == COMMAND_SET_BOOKMARK:
         set_bookmark(query, context, book_id)
 
-    # update.callback_query.message.reply_text(answer)
-    # print(type(update.callback_query.message))
 # ====================================================
 
 
@@ -321,24 +318,22 @@ def get_page(update: Update, context: CallbackContext):
             new_page = int(update.message.text)
         except ValueError:
             update.message.reply_text(text="Вы ввели не число.\n\nВернули вас в главное меню.")
+            return
 
         book_id = context.chat_data['book_id']
 
         username = update.effective_user.username
-        # user = api.api.get_users(name=username, first=True)
-        # book = api.api.get_books(id=book_id)
-        #
-        # record = api.api.get_records(user=user, book=book, first=True)
+        user = api.api.get_users(name=username, first=True)
+        book = api.api.get_books(id=book_id)
 
-        # api.api.update_record(record=record, int(new_page))
-        answer = "Номер страницы, на которой вы остановились, обновлена.\n\n" #+ \
-                 # book_to_string(book, bookmark=record.page, progress=record.progress)
+        record = api.api.get_records(user=user, book=book, first=True)
+
+        api.api.update_record(record=record, page=new_page)
+        answer = "Номер страницы, на которой вы остановились, обновлена.\n\n" + \
+                 book_to_string(book, bookmark=record.page, progress=record.progress)
+
         update.message.reply_text(text=answer,
                                   reply_markup=create_inline_buttons(username, book_id, delete=True, set_bookmark=True))
-
-# @is_database_created
-def for_test(update: Update, context: CallbackContext):
-    update.message.reply_text(text="kzkfkzkdsasd", reply_markup=create_inline_buttons("asdad", 12, set_bookmark=True))
 
 
 if __name__ == '__main__':
@@ -389,8 +384,5 @@ if __name__ == '__main__':
 
     set_bookmark_handler = MessageHandler(Filters.text & ~Filters.command, get_page)
     dispatcher.add_handler(set_bookmark_handler)
-
-    test_handler = CommandHandler('test', for_test)
-    dispatcher.add_handler(test_handler)
 
     updater.start_polling()
