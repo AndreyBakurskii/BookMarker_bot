@@ -192,7 +192,7 @@ def show_books(update: Update, _: CallbackContext):
 @is_database_created
 def my_library(update: Update, _: CallbackContext):
     # запрос в бд
-    user = api.api.get_users(update.effective_user.username)
+    user = api.api.get_users(name=update.effective_user.username)
     records = api.api.get_records(user=user)
 
     if records:

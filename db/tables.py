@@ -41,9 +41,9 @@ class User(Table):
     name = sql.Column(sql.VARCHAR(255), nullable=False)
     isAdmin = sql.Column(sql.Boolean, nullable=False)
 
-    def __init__(self, name):
+    def __init__(self, name, isAdmin=False):
         self.name = name
-        self.isAdmin = False
+        self.isAdmin = isAdmin
 
 ######################################################################################
 
